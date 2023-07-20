@@ -1,15 +1,20 @@
+# SPDX-FileCopyrightText: 2023 Vladislav Trofimenko <slashcooperlive@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 import glob
 import io
 import os
+
 import time
 from dataclasses import dataclass
-
 import cv2
 import flet as ft
 import numpy as np
 import platformdirs
 from PIL import Image, ImageOps
-from cairosvg import svg2png
+# from PIL import ImageDraw
+from cairosvg import svg2png  # noqa
 
 
 @dataclass
@@ -33,13 +38,9 @@ def main(page: ft.Page):
     def pick_files_result(e: ft.FilePickerResultEvent):
         if e.path:
             if e.control.data == 'input':
-                selected_paths.input = e.path
                 input_path_field.value = e.path
-            if e.control.data == 'output':
-                selected_paths.output = e.path
+            elif e.control.data == 'output':
                 output_path_field.value = e.path
-            if selected_paths.input and selected_paths.output:
-                start_button.disabled = False
         page.update()
 
     def clean_error(e):
@@ -134,13 +135,18 @@ def main(page: ft.Page):
             output_path_field.error_text = 'Укажите корректный путь'
             output_path_field.update()
         if summary:
+            selected_paths.input = input_path_field.value
+            selected_paths.output = output_path_field.value
+            if selected_paths.input and selected_paths.output:
+                start_button.disabled = False
             if not os.path.exists(cache_path):
-                os.mkdir(cache_dir)
+                os.makedirs(cache_dir)
             with open(cache_path, 'wb') as cache:
                 cache.truncate()
                 cache.write(input_path_field.value.encode('utf-8') + b'\n')
                 cache.write(output_path_field.value.encode('utf-8') + b'\n')
             dlg_modal.open = False
+
         page.update()
 
     input_dialog = ft.FilePicker(on_result=pick_files_result, data='input')
@@ -157,9 +163,9 @@ def main(page: ft.Page):
         text_size=12,
         suffix=ft.IconButton(
             icon=ft.icons.FOLDER,
-            on_click=lambda _: input_dialog.get_directory_path(dialog_title='Путь для чтения'),
+            on_click=lambda _: input_dialog.get_directory_path('Путь для чтения')
         ),
-        on_change=clean_error
+        on_change=clean_error,
     )
     output_path_field = ft.TextField(
         label='Путь для записи',
@@ -168,9 +174,9 @@ def main(page: ft.Page):
         text_size=12,
         suffix=ft.IconButton(
             icon=ft.icons.FOLDER,
-            on_click=lambda _: output_dialog.get_directory_path(dialog_title='Путь для записи')
+            on_click=lambda _: output_dialog.get_directory_path('Путь для записи')
         ),
-        on_change=clean_error
+        on_change=clean_error,
     )
     dlg_modal = ft.AlertDialog(
         title=ft.Text('Выберите папки', size=20),
@@ -186,6 +192,7 @@ def main(page: ft.Page):
             ft.TextButton('Отмена', on_click=close_dlg),
             ft.TextButton('Принять', on_click=accept_dlg),
         ],
+        on_dismiss=close_dlg,
         actions_alignment=ft.MainAxisAlignment.END,
     )
     page.overlay.append(input_dialog)
