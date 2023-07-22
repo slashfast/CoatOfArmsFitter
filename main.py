@@ -12,7 +12,7 @@ import cv2
 import flet as ft
 import numpy as np
 import platformdirs
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageDraw
 # from PIL import ImageDraw
 from cairosvg import svg2png  # noqa
 
@@ -47,6 +47,18 @@ def main(page: ft.Page):
         e.control.error_text = None
         e.control.update()
 
+    def scale_contour(cnt, scale):
+        M = cv2.moments(cnt)
+        cx = int(M['m10'] / M['m00'])
+        cy = int(M['m01'] / M['m00'])
+
+        cnt_norm = cnt - [cx, cy]
+        cnt_scaled = cnt_norm * scale
+        cnt_scaled = cnt_scaled + [cx, cy]
+        cnt_scaled = cnt_scaled.astype(np.int32)
+
+        return cnt_scaled
+
     def start(_):
         input_folder = selected_paths.input
         output_folder = selected_paths.output
@@ -74,26 +86,77 @@ def main(page: ft.Page):
             image = ImageOps.contain(image, (diameter, diameter), 5)
             mask = Image.new('L', image.size, 0)
             mask.paste(255, (0, 0), image.split()[3])
+            # mask.save('folder' + output_name)
             mask = np.asarray(mask)  # noqa
-            scale_percent = 60.0
+            scale_percent = 80.0
             radius = 0
-            mask = np.asarray(mask)
+            image_rst = np.asarray(image)  # noqa
+            contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_TC89_L1)
+            points3 = [pt[0] for ctr in contours for pt in ctr]
+            points3 = np.array(points3).reshape((-1, 1, 2)).astype(np.int32)
+            hull3 = cv2.convexHull(points3)
+            result3 = cv2.drawContours(image_rst.copy(), [hull3], -1, (255, 255, 255), 1, cv2.LINE_AA)
+            mask = cv2.cvtColor(result3, cv2.COLOR_BGR2GRAY)
+            mask[mask != 0] = 255
+            # (x, y), radius = cv2.minEnclosingCircle(hull3)
+            # radius = round(radius)
+            # print(radius)
+            # center = (round(x), round(y))
+            # cv2.circle(image_rst, center, radius, (0, 255, 0), 2)
+            # cv2.imshow('result3', image_rst)
+            # cv2.waitKey(0)
+            # cv2.destroyAllWindows()
             while target_radius != radius:
                 width = round(mask.shape[1] * scale_percent / 100)
                 height = round(mask.shape[0] * scale_percent / 100)
+                # width_image = round(mask.shape[1] * scale_percent / 100)
+                # height_image = round(mask.shape[0] * scale_percent / 100)
                 resized = cv2.resize(mask, (width, height), interpolation=cv2.INTER_NEAREST)
+                # resized_image = cv2.resize(image_rst, (width_image, height_image), interpolation=cv2.INTER_NEAREST)
                 contours, _ = cv2.findContours(resized, cv2.RETR_TREE, cv2.CHAIN_APPROX_TC89_L1)
                 cnt = contours[0]
                 (x, y), radius = cv2.minEnclosingCircle(cnt)
                 radius = round(radius)
                 if radius < target_radius:
-                    scale_percent += 0.1
+                    scale_percent += 0.5
                     continue
                 elif radius > target_radius:
-                    scale_percent -= 0.1
+                    scale_percent -= 0.5
                     continue
                 elif radius == target_radius:
                     center = (round(x), round(y))
+
+                    # for contour in contours:
+                    #     convexHull = cv2.convexHull(contour)
+                    #     cv2.drawContours(resized_image, [convexHull], -1, (255, 0, 0), 2)
+                    # cv2.imshow('Contours', resized_image)
+                    # cv2.waitKey(0)
+                    # cv2.destroyAllWindows()
+
+                    # points3 = [pt[0] for ctr in contours for pt in ctr]
+                    # points3 = np.array(points3).reshape((-1, 1, 2)).astype(np.int32)
+                    # hull3 = cv2.convexHull(points3)
+                    # result3 = cv2.drawContours(resized_image.copy(), [hull3], -1, (0, 255, 0), 1, cv2.LINE_AA)
+                    # cv2.imshow('result3', result3)
+                    # cv2.waitKey(0)
+                    # cv2.destroyAllWindows()
+
+                    # kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (10, 10))
+                    # dilate = cv2.dilate(resized, kernel, iterations=5)
+                    # cv2.imshow('Dilate', dilate)
+                    # cv2.waitKey(0)
+                    # cv2.destroyAllWindows()
+
+                    # cv2.drawContours(resized_image, contours, -1, (0, 255, 0), 3)
+                    # cv2.imshow('Contours', resized_image)
+                    # cv2.waitKey(0)
+                    # cv2.destroyAllWindows()
+                    #
+                    # cv2.circle(resized_image, center, radius, (0, 255, 0), 2)
+                    # cv2.imshow('convex hull', resized_image)
+                    # cv2.waitKey(0)
+                    # cv2.destroyAllWindows()
+
                     image = image.resize((width, height), 5)
                     background = Image.new('RGBA', (size, size), (0, 0, 0, 0))
                     # draw = ImageDraw.Draw(background)
